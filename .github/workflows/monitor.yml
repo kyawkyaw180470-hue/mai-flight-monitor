@@ -1,0 +1,39 @@
+name: MAI Flight Monitor
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Chrome
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+
+      - name: Install Python deps
+        run: |
+          pip install selenium requests
+
+      - name: Run check
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+          DEPARTURE_DATE: ${{ secrets.DEPARTURE_DATE }}
+          ADULTS: ${{ secrets.ADULTS }}
+          CHILDREN: ${{ secrets.CHILDREN }}
+          INFANTS: ${{ secrets.INFANTS }}
+        run: python check_flight.py
