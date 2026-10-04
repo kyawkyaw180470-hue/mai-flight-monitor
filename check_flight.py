@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""MAI Flight Monitor — GitHub Actions (single-shot)"""
+"""MAI Flight Monitor — undetected-chromedriver version"""
 import os
 import re
 import sys
@@ -10,10 +10,8 @@ from urllib.parse import urlencode
 import requests
 
 try:
-    from selenium import webdriver
+    import undetected_chromedriver as uc
     from selenium.webdriver.common.by import By
-    from selenium.webdriver.chrome.options import Options
-    from selenium.common.exceptions import WebDriverException
 except ImportError as e:
     print(f"Missing library: {e}")
     sys.exit(1)
@@ -27,7 +25,7 @@ CHILDREN = int(os.environ.get("CHILDREN", "0"))
 INFANTS = int(os.environ.get("INFANTS", "0"))
 
 if not all([TELEGRAM_TOKEN, CHAT_ID, DEPARTURE_DATE]):
-    print("ERROR: Missing required env vars (TELEGRAM_TOKEN, CHAT_ID, DEPARTURE_DATE)")
+    print("ERROR: Missing required env vars")
     sys.exit(1)
 
 DEP_PORT, ARR_PORT = "RGN", "MYT"
@@ -90,18 +88,13 @@ def send_telegram(message):
 
 
 def make_driver():
-    options = Options()
-    options.add_argument("--headless=new")
+    options = uc.ChromeOptions()
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-gpu")
     options.add_argument("--window-size=1920,1080")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    )
-    driver = webdriver.Chrome(options=options)
+    options.add_argument("--lang=en-US")
+    driver = uc.Chrome(options=options, use_subprocess=True)
     driver.set_page_load_timeout(60)
     return driver
 
@@ -109,7 +102,7 @@ def make_driver():
 def check_once(driver):
     log(f"Checking {DEP_PORT}->{ARR_PORT} {DEPARTURE_DATE} ...")
     driver.get(AVAILABILITY_URL)
-    time.sleep(15)
+    time.sleep(20)
 
     body_text = driver.find_element(By.TAG_NAME, "body").text.lower()
 
@@ -117,6 +110,7 @@ def check_once(driver):
         "sorry, you have been blocked", "attention required",
         "unable to access crane.aero", "why have i been blocked",
         "cloudflare ray id", "security service to protect",
+        "checking your browser", "just a moment",
     )
     if any(m in body_text for m in block_markers):
         log("UNKNOWN: Cloudflare/security block")
@@ -142,7 +136,7 @@ def check_once(driver):
 
 
 def main():
-    log("MAI Flight Monitor starting (GitHub Actions)")
+    log("MAI Flight Monitor starting (undetected)")
     log(f"Route: {DEP_PORT} -> {ARR_PORT}; Date: {DEPARTURE_DATE}")
 
     old_state = load_state()
@@ -152,11 +146,8 @@ def main():
     try:
         driver = make_driver()
         new_state = check_once(driver)
-    except WebDriverException as e:
-        log(f"WebDriver Error: {str(e)[:200]}")
-        new_state = "unknown"
     except Exception as e:
-        log(f"Error: {e}")
+        log(f"Error: {str(e)[:300]}")
         new_state = "unknown"
     finally:
         if driver:
@@ -179,7 +170,7 @@ def main():
         )
         send_telegram(message)
     elif new_state == "available" and old_state == "available":
-        log("Still available — no notification (already sent)")
+        log("Still available — no notification")
 
     save_state(new_state)
     log("Done.")
